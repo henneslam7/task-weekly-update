@@ -10,3 +10,7 @@ node_modules/
 templates/
 exports/
 .DS_Store
+spike/pptx/out/
+spike/pptx/node_modules/
+*.tsbuildinfo
+next-env.d.ts
