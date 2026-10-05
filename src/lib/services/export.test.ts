@@ -116,7 +116,7 @@ describe("exportWeeklyDeck", () => {
   it("explains missing Blob configuration (both methods) before touching the db", async () => {
     await seed();
     delete process.env.BLOB_READ_WRITE_TOKEN;
-    const err = await exportWeeklyDeck("2026-10-05").catch((e) => e as Error);
+    const err = (await exportWeeklyDeck("2026-10-05").catch((e: unknown) => e)) as Error;
     expect(err).toBeInstanceOf(ExportError);
     expect(err.message).toMatch(/BLOB_READ_WRITE_TOKEN/);
     expect(err.message).toMatch(/BLOB_STORE_ID/);
