@@ -1,0 +1,18 @@
+{
+  "week_start": "2026-09-28",
+  "focus_line": "Focus: land the Q4 lounge campaign and unblock the CMS migration.",
+  "wins": ["Aerotel summer campaign page launched, +18% bookings WoW", "Smart Traveller app v3.2 approved by App Store", "Signed partner SLA with two airline programs"],
+  "progress": ["Kentico CMS migration at 62%, templates done", "Lounge booking funnel redesign: wireframes reviewed", "Brand guide rollout: 14 of 20 pages updated"],
+  "blockers": ["Legal review of ALLWAYS terms still pending", "Payment gateway sandbox access not granted"],
+  "support_needed": ["Decision on hero imagery from Marketing by Wed", "Two extra QA hours for the Smart Traveller release"],
+  "projects": [
+    {"name":"Kentico CMS migration","priority":"High","rag":"amber","progress_pct":62,"next_steps":"Migrate remaining 12 campaign templates; freeze content on 10 Oct","blocker":"Staging licence expires 8 Oct"},
+    {"name":"Lounge booking funnel","priority":"High","rag":"green","progress_pct":40,"next_steps":"Usability test with 8 travellers; finalise checkout states","blocker":""},
+    {"name":"ALLWAYS terms page","priority":"Medium","rag":"red","progress_pct":25,"next_steps":"Chase legal for sign-off; prepare fallback copy","blocker":"Legal review pending since 21 Sep"},
+    {"name":"Smart Traveller v3.2","priority":"High","rag":"green","progress_pct":90,"next_steps":"Staged rollout 10% -> 50% -> 100%","blocker":""},
+    {"name":"Brand guide rollout","priority":"Low","rag":"green","progress_pct":70,"next_steps":"Update remaining 6 pages; publish to Brand Hub","blocker":""},
+    {"name":"Payment gateway upgrade","priority":"Medium","rag":"red","progress_pct":15,"next_steps":"Obtain sandbox credentials; start integration spike","blocker":"Sandbox access not granted by provider"},
+    {"name":"Aerotel summer campaign","priority":"Medium","rag":"green","progress_pct":100,"next_steps":"Post-campaign report","blocker":""},
+    {"name":"Airline loyalty integration","priority":"Low","rag":"amber","progress_pct":30,"next_steps":"Agree API contract with partner engineering; draft test plan with a deliberately very long wording to prove truncation works properly across the row","blocker":"Partner API docs incomplete and a long blocker text to test the shorter truncation limit"}
+  ]
+}
