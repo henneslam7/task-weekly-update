@@ -32,12 +32,9 @@ export type DeckPayload = {
 };
 
 export type StatusRow = { name: string; priority: string; rag: Rag; pct: number; next: string; blocker: string };
-export type SummarySlide = {
-  type: "summary";
-  title: string;
-  sub: string[];
-  columns: { head: string; items?: string[]; groups?: [string, string[]][] }[];
-};
+export type Block = { kind: "heading" | "bullet" | "empty"; text: string };
+export type SummaryColumn = { head: string; accent: "yellow" | "red"; blocks: Block[] };
+export type SummarySlide = { type: "summary"; title: string; sub: string[]; columns: SummaryColumn[] };
 export type StatusSlide = { type: "status"; title: string; sub: string[]; rows: StatusRow[] };
 export type PlannedSlide = SummarySlide | StatusSlide;
 
@@ -74,27 +71,86 @@ export const fmtDate = (iso: string) => {
   return `${d} ${MON[m - 1]} ${y}`;
 };
 
-/** Pick the largest font size at which the bullets fit; else drop trailing bullets with "+N more". */
-export function fitBullets(items: string[], widthIn: number, heightIn: number): { size: number; items: string[] } {
-  const list = items.map((t) => truncate(t, L.maxBulletChars)).filter(Boolean);
-  let last = { size: 9, items: list };
-  for (const size of [14, 13, 12, 11, 10, 9]) {
-    const cpl = Math.floor(((widthIn - 0.35) * 72) / (size * 0.5));
-    const lineH = size * 1.2;
-    const gap = 5;
-    let used = 0;
-    let n = 0;
-    for (const t of list) {
-      const h = Math.ceil(t.length / cpl) * lineH + gap;
-      if (used + h > heightIn * 72) break;
-      used += h;
-      n++;
+// ---- Pagination of the summary cards -------------------------------------------------------------------
+// Text is never shrunk below BULLET_PT and never replaced by "+N more": overflow goes to continuation slides.
+export const BULLET_PT = 14;
+const LINE_PT = BULLET_PT * 1.2;
+const BULLET_GAP_PT = 5;
+const HEAD_PT = 9 * 1.2 + 4; // group label (9pt) + space after
+const HEAD_GAP_PT = 10; // extra space above a group label that is not first on the page
+const CHAR_EM = 0.48; // average Arial glyph width in em (slightly conservative; Liberation Sans measured ~0.45 on sample text)
+const SLACK = 0.95; // keep 5% free at the bottom of a card
+
+/** Lines needed for `text` at the bullet font size in a text box `widthIn` wide (greedy word wrap). */
+export function countLines(text: string, widthIn: number): number {
+  const cpl = Math.max(8, Math.floor((widthIn * 72 - 12) / (BULLET_PT * CHAR_EM)));
+  let lines = 1;
+  let cur = 0;
+  for (const w of text.split(" ")) {
+    let len = w.length;
+    while (len > cpl) {
+      // unbreakable run longer than a line: it wraps by character
+      if (cur > 0) lines++;
+      lines += Math.floor((len - 1) / cpl);
+      len = len % cpl || cpl;
+      cur = 0;
     }
-    if (n === list.length) return { size, items: list };
-    const keep = Math.max(n - 1, 0);
-    last = { size, items: [...list.slice(0, keep), `+${list.length - keep} more (see portal)`] };
+    if (cur === 0) cur = len;
+    else if (cur + 1 + len <= cpl) cur += 1 + len;
+    else {
+      lines++;
+      cur = len;
+    }
   }
-  return last;
+  return lines;
+}
+
+type Group = { heading?: string; items: string[] };
+
+/** Flow the groups of one card into pages that fit `capPt`; a group label is repeated when its list continues. */
+export function paginateColumn(groups: Group[], textWidthIn: number, capPt: number): Block[][] {
+  const cap = capPt * SLACK;
+  const pages: Block[][] = [[]];
+  let used = 0;
+  let shown = false; // current group's label already on this page
+  const page = () => pages[pages.length - 1];
+  const headH = () => HEAD_PT + (page().length ? HEAD_GAP_PT : 0);
+  const newPage = () => {
+    pages.push([]);
+    used = 0;
+    shown = false;
+  };
+  for (const g of groups) {
+    shown = false;
+    const items = g.items.map((t) => truncate(t, L.maxBulletChars)).filter(Boolean);
+    if (!items.length) {
+      const need = (g.heading ? headH() : 0) + LINE_PT + BULLET_GAP_PT;
+      if (used + need > cap && page().length) newPage();
+      if (g.heading) {
+        used += headH();
+        page().push({ kind: "heading", text: g.heading });
+      }
+      used += LINE_PT + BULLET_GAP_PT;
+      page().push({ kind: "empty", text: "None this week" });
+      continue;
+    }
+    for (const t of items) {
+      const h = countLines(t, textWidthIn) * LINE_PT + BULLET_GAP_PT;
+      let need = h + (g.heading && !shown ? headH() : 0);
+      if (used + need > cap && page().length) {
+        newPage();
+        need = h + (g.heading ? headH() : 0);
+      }
+      if (g.heading && !shown) {
+        used += headH();
+        page().push({ kind: "heading", text: g.heading });
+        shown = true;
+      }
+      used += h;
+      page().push({ kind: "bullet", text: t });
+    }
+  }
+  return pages;
 }
 
 export function plan(p: unknown): PlannedSlide[] {
@@ -113,25 +169,41 @@ export function plan(p: unknown): PlannedSlide[] {
       next: truncate(r.next_steps || "-", L.nextStepsChars),
       blocker: truncate(r.blocker || "-", L.blockerChars),
     }));
-  const slides: PlannedSlide[] = [
+
+  // Summary cards: same geometry as drawSummary (3 cards, text box = card width - 0.4in, height = content area - header).
+  const cardW = (MAP.contentArea.w - 2 * 0.25) / 3;
+  const capPt = (MAP.contentArea.h - 0.65 - 0.15) * 72;
+  const cards: { head: string; accent: "yellow" | "red"; groups: Group[] }[] = [
+    { head: "Wins", accent: "yellow", groups: [{ items: p.wins }] },
+    { head: "Key progress", accent: "yellow", groups: [{ items: p.progress }] },
     {
-      type: "summary",
-      title: "Executive summary",
-      sub,
-      columns: [
-        { head: "Wins", items: p.wins },
-        { head: "Key progress", items: p.progress },
-        {
-          head: "Blockers & support needed",
-          groups: [
-            ["Blockers", p.blockers],
-            ["Support needed", p.support_needed],
-          ],
-        },
+      head: "Blockers & support needed",
+      accent: "red",
+      groups: [
+        { heading: "Blockers", items: p.blockers },
+        { heading: "Support needed", items: p.support_needed },
       ],
     },
   ];
-  const pages = Math.max(1, Math.ceil(projects.length / L.maxProjectRowsPerSlide));
+  const paged = cards.map((c) => ({ ...c, pages: paginateColumn(c.groups, cardW - 0.4, capPt) }));
+  const nSummary = Math.max(...paged.map((c) => c.pages.length));
+  const slides: PlannedSlide[] = [];
+  for (let k = 0; k < nSummary; k++) {
+    const cols = paged.filter((c) => c.pages[k]).map((c) => ({ head: c.head, accent: c.accent, blocks: c.pages[k] }));
+    const heads = cols.map((c) => c.head);
+    slides.push({
+      type: "summary",
+      title:
+        k === 0
+          ? "Executive summary"
+          : `${heads.length === cards.length ? "Executive summary" : heads.join(" & ")} (cont.${k > 1 ? " " + k : ""})`,
+      sub: k === 0 ? sub : [`Week of ${week}`],
+      columns: cols,
+    });
+  }
+
+  const per = L.maxProjectRowsPerSlide;
+  const pages = Math.max(1, Math.ceil(projects.length / per));
   for (let k = 0; k < pages; k++)
     slides.push({
       type: "status",
@@ -145,23 +217,20 @@ export function plan(p: unknown): PlannedSlide[] {
                 .join(", ")}`,
             ]
           : [`Week of ${week}`],
-      rows: projects.slice(k * L.maxProjectRowsPerSlide, (k + 1) * L.maxProjectRowsPerSlide),
+      rows: projects.slice(k * per, (k + 1) * per),
     });
   return slides;
 }
 
 export function dryRunText(slides: PlannedSlide[]): string {
-  const out: string[] = [];
+  const out: string[] = [`Total slides: ${slides.length}`, ...slides.map((s, i) => `  ${i + 1}. ${s.title}`), ""];
   slides.forEach((s, i) => {
-    out.push(`=== Slide ${i + 1}: ${s.title} (${s.type}) ===`, ...s.sub.map((t) => "  > " + t));
+    out.push(`=== Slide ${i + 1} of ${slides.length}: ${s.title} (${s.type}) ===`, ...s.sub.map((t) => "  > " + t));
     if (s.type === "summary")
       for (const c of s.columns) {
         out.push(`  [${c.head}]`);
-        for (const [h, items] of c.groups ?? ([[null, c.items ?? []]] as [string | null, string[]][])) {
-          if (h) out.push(`    ${h}:`);
-          const f = fitBullets(items, 3.95, c.groups ? 1.6 : 3.9);
-          out.push(...(f.items.length ? f.items : ["None this week"]).map((t) => `    - ${t}`), `    (font ${f.size}pt)`);
-        }
+        for (const b of c.blocks)
+          out.push(b.kind === "heading" ? `    ${b.text}:` : b.kind === "empty" ? `    ${b.text}` : `    - ${b.text}`);
       }
     else
       s.rows.forEach((r) =>

@@ -25,7 +25,7 @@ describe("buildDeck", () => {
     const projects = Array.from({ length: 15 }, (_, i) => ({ name: "P" + i, rag: "green", progress_pct: 10, next_steps: "x".repeat(500) }));
     const r = await buildDeck({ ...sample, projects }, { dryRun: true });
     expect(r.slides.filter((s) => s.type === "status")).toHaveLength(3);
-    expect(r.text).not.toContain("x".repeat(130));
+    expect(r.text).not.toContain("x".repeat(160));
   });
 
   it("renders a small, valid pptx from the committed slimmed template", async () => {

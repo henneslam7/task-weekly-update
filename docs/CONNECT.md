@@ -30,7 +30,7 @@ Add `--scope user` to make it available in every project.
 
 ## Tools
 
-`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the previous week when called on a Monday). Project names are matched loosely.
+`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`, `export_weekly_deck`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the previous week when called on a Monday). Project names are matched loosely.
 
 ## Weekly routine (paste into a Claude Project's instructions)
 

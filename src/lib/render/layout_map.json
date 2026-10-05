@@ -36,10 +36,10 @@
     "green": "3E9B5F"
   },
   "limits": {
-    "maxProjectRowsPerSlide": 7,
-    "maxBulletChars": 200,
-    "nextStepsChars": 120,
-    "blockerChars": 90,
+    "maxProjectRowsPerSlide": 6,
+    "maxBulletChars": 300,
+    "nextStepsChars": 150,
+    "blockerChars": 120,
     "focusLineChars": 220
   },
   "template_slide_slim": 1

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Automizer, modify } from "pptx-automizer";
 import MAP from "./layout_map.json";
-import { DeckError, fitBullets, plan, dryRunText, type PlannedSlide, type SummarySlide, type StatusSlide } from "./plan";
+import { BULLET_PT, DeckError, plan, dryRunText, type PlannedSlide, type SummarySlide, type StatusSlide } from "./plan";
 import { slim } from "./slim";
 
 export { DeckError } from "./plan";
@@ -12,6 +12,7 @@ export type { DeckPayload } from "./plan";
 const B = MAP.brand;
 const A = MAP.contentArea;
 const RAGC = MAP.rag as Record<string, string>;
+const HEAD_GAP = 10;
 const titleCase = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 /** The committed, pre-slimmed brand template (single slide + its layout/master, ~50 KB). */
@@ -23,31 +24,22 @@ export function defaultTemplatePath(): string {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function drawSummary(s: SummarySlide, slide: any) {
   const gap = 0.25;
-  const cw = (A.w - 2 * gap) / 3;
+  const cw = (A.w - 2 * gap) / 3; // same card width on every summary slide, so pagination estimates hold
   s.columns.forEach((c, i) => {
     const x = A.x + i * (cw + gap);
     slide.addShape("rect", { x, y: A.y, w: cw, h: A.h, fill: { color: B.paper }, line: { color: B.paper } });
-    slide.addShape("rect", { x, y: A.y, w: cw, h: 0.07, fill: { color: i === 2 ? RAGC.red : B.yellow }, line: { type: "none" } });
+    slide.addShape("rect", { x, y: A.y, w: cw, h: 0.07, fill: { color: c.accent === "red" ? RAGC.red : B.yellow }, line: { type: "none" } });
     slide.addText(c.head, { x: x + 0.2, y: A.y + 0.15, w: cw - 0.4, h: 0.4, fontFace: B.headFont, fontSize: 18, color: B.ink, margin: 0 });
-    const groups = c.groups ?? ([[null, c.items ?? []]] as [string | null, string[]][]);
-    let y = A.y + 0.65;
-    const avail = A.h - 0.65 - 0.15;
-    groups.forEach(([h, items]) => {
-      const gh = c.groups ? avail / 2 : avail;
-      let top = y;
-      let hh = gh;
-      if (h) {
-        slide.addText(h.toUpperCase(), { x: x + 0.2, y, w: cw - 0.4, h: 0.25, fontFace: B.bodyFont, fontSize: 9, bold: true, charSpacing: 2, color: "7A7468", margin: 0 });
-        top += 0.3;
-        hh -= 0.3;
-      }
-      const f = fitBullets(items, cw, hh - 0.05);
-      const runs = f.items.length
-        ? f.items.map((t) => ({ text: t, options: { bullet: { indent: 12 }, breakLine: true, paraSpaceAfter: 5 } }))
-        : [{ text: "None this week", options: { italic: true, color: "7A7468" } }];
-      slide.addText(runs, { x: x + 0.2, y: top, w: cw - 0.4, h: hh - 0.05, valign: "top", fontFace: B.bodyFont, fontSize: f.size, color: B.ink, margin: 0 });
-      y += gh;
+    let first = true;
+    const runs = c.blocks.map((b) => {
+      const isFirst = first;
+      first = false;
+      if (b.kind === "heading")
+        return { text: b.text.toUpperCase(), options: { fontSize: 9, bold: true, charSpacing: 2, color: "7A7468", breakLine: true, paraSpaceBefore: isFirst ? 0 : HEAD_GAP, paraSpaceAfter: 4 } };
+      if (b.kind === "empty") return { text: b.text, options: { fontSize: BULLET_PT, italic: true, color: "7A7468", breakLine: true, paraSpaceAfter: 5 } };
+      return { text: b.text, options: { fontSize: BULLET_PT, bullet: { indent: 12 }, breakLine: true, paraSpaceAfter: 5 } };
     });
+    slide.addText(runs, { x: x + 0.2, y: A.y + 0.65, w: cw - 0.4, h: A.h - 0.65 - 0.1, valign: "top", fontFace: B.bodyFont, fontSize: BULLET_PT, color: B.ink, margin: 0 });
   });
 }
 

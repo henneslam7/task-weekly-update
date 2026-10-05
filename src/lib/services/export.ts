@@ -50,7 +50,7 @@ export function summaryToPayload(s: WeekSummary): { payload: DeckPayload; warnin
   const p1 = s.projects.filter((r) => r.project.priority === "P1" && isActive(r.project)).map((r) => r.project.name);
   const redirected = s.requests.filter((r) => r.outcome === "redirected").length;
   const focus = [
-    p1.length ? `Focus: ${p1.slice(0, 3).join(", ")}${p1.length > 3 ? ` +${p1.length - 3} more` : ""}.` : "",
+    p1.length ? `Focus: ${p1.join(", ")}.` : "",
     s.requests.length ? `${redirected} of ${s.requests.length} new requests redirected.` : "",
   ]
     .filter(Boolean)
