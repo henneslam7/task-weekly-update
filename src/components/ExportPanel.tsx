@@ -9,6 +9,7 @@ type Result = {
   slideText: string;
   warnings: string[];
   downloadUrl?: string;
+  downloadPath?: string;
   expiresAt?: string;
   error?: string;
 };
@@ -54,9 +55,9 @@ export function ExportPanel({ weekStart }: { weekStart: string }) {
       {res?.warnings?.length ? (
         <ul className="list-disc pl-5 text-sm text-amber-800">{res.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
       ) : null}
-      {res?.downloadUrl && (
+      {(res?.downloadUrl || res?.downloadPath) && (
         <p className="text-sm">
-          <a className="font-medium underline" href={res.downloadUrl}>Download deck (.pptx)</a>
+          <a className="font-medium underline" href={res.downloadUrl ?? res.downloadPath}>Download deck (.pptx)</a>
           <span className="text-slate-500"> link valid for 10 minutes</span>
         </p>
       )}

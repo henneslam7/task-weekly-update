@@ -8,6 +8,7 @@ const blob = vi.hoisted(() => ({
   put: vi.fn(),
   issueSignedToken: vi.fn(),
   presignUrl: vi.fn(),
+  get: vi.fn(),
 }));
 vi.mock("@vercel/blob", () => blob);
 
@@ -37,6 +38,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await pg.exec("TRUNCATE achievement, request_log, weekly_update, export_run, file, project RESTART IDENTITY CASCADE");
   vi.resetAllMocks();
+  for (const k of ["BLOB_READ_WRITE_TOKEN", "BLOB_STORE_ID", "VERCEL_OIDC_TOKEN", "VERCEL"]) delete process.env[k];
   process.env.BLOB_READ_WRITE_TOKEN = "test-token";
   blob.put.mockImplementation(async (pathname: string) => ({ pathname: pathname.replace(".pptx", "-abc.pptx"), url: "x" }));
   blob.issueSignedToken.mockResolvedValue({ delegationToken: "d", clientSigningToken: "c", validUntil: 0 });
@@ -111,11 +113,64 @@ describe("exportWeeklyDeck", () => {
     await expect(getRunDownloadUrl(runs[0].id)).rejects.toBeInstanceOf(ExportError);
   });
 
-  it("explains missing Blob configuration before touching the db", async () => {
+  it("explains missing Blob configuration (both methods) before touching the db", async () => {
     await seed();
     delete process.env.BLOB_READ_WRITE_TOKEN;
-    delete process.env.VERCEL_OIDC_TOKEN;
-    await expect(exportWeeklyDeck("2026-10-05")).rejects.toThrow(/BLOB_READ_WRITE_TOKEN/);
+    const err = await exportWeeklyDeck("2026-10-05").catch((e) => e as Error);
+    expect(err).toBeInstanceOf(ExportError);
+    expect(err.message).toMatch(/BLOB_READ_WRITE_TOKEN/);
+    expect(err.message).toMatch(/BLOB_STORE_ID/);
+    expect(err.message).toMatch(/OIDC/);
+    expect(err.message).not.toContain("test-token");
+    expect(blob.put).not.toHaveBeenCalled();
     expect(await listExportRuns()).toHaveLength(0);
+  });
+
+  it("works with only BLOB_STORE_ID on Vercel (OIDC, no read-write token)", async () => {
+    await seed();
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    process.env.BLOB_STORE_ID = "store_abc123";
+    process.env.VERCEL = "1";
+    const r = await exportWeeklyDeck("2026-10-05", { now: NOW });
+    expect(blob.put.mock.calls[0][2]).toMatchObject({ access: "private" });
+    expect(blob.put.mock.calls[0][2]).not.toHaveProperty("token"); // the SDK resolves OIDC itself
+    expect(r.downloadUrl).toContain("signed");
+  });
+
+  it("BLOB_STORE_ID alone is not enough off Vercel without an OIDC token", async () => {
+    await seed();
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    process.env.BLOB_STORE_ID = "store_abc123";
+    await expect(exportWeeklyDeck("2026-10-05")).rejects.toThrow(/not configured/);
+    process.env.VERCEL_OIDC_TOKEN = "jwt";
+    await expect(exportWeeklyDeck("2026-10-05", { now: NOW })).resolves.toMatchObject({ dryRun: false });
+  });
+
+  it("maps a credentials rejection from Blob to the actionable message and records a failed run", async () => {
+    await seed();
+    blob.put.mockRejectedValue(new Error("Vercel Blob: No blob credentials found. Pass a `token` option"));
+    await expect(exportWeeklyDeck("2026-10-05")).rejects.toThrow(/rejected the credentials[\s\S]*OIDC/);
+    expect((await listExportRuns())[0]).toMatchObject({ status: "failed" });
+  });
+
+  it("keeps the deck reachable via the authenticated route when only the signed link fails", async () => {
+    await seed();
+    blob.presignUrl.mockRejectedValue(new Error("signing endpoint unavailable"));
+    const r = await exportWeeklyDeck("2026-10-05", { now: NOW });
+    expect(r.downloadUrl).toBeUndefined();
+    expect(r.downloadPath).toBe(`/api/export/download?run=${r.runId}`);
+    expect(r.warnings.join(" ")).toMatch(/signed download link[\s\S]*login required/);
+    expect((await listExportRuns())[0]).toMatchObject({ status: "done" });
+  });
+});
+
+describe("blobAuthMode", () => {
+  it("prefers the token, then OIDC, else none", async () => {
+    const { blobAuthMode } = await import("../blob");
+    expect(blobAuthMode({ BLOB_READ_WRITE_TOKEN: "t", BLOB_STORE_ID: "s" })).toBe("token");
+    expect(blobAuthMode({ BLOB_STORE_ID: "s", VERCEL: "1" })).toBe("oidc");
+    expect(blobAuthMode({ BLOB_STORE_ID: "s", VERCEL_OIDC_TOKEN: "j" })).toBe("oidc");
+    expect(blobAuthMode({ BLOB_STORE_ID: "s" })).toBe("none");
+    expect(blobAuthMode({})).toBe("none");
   });
 });

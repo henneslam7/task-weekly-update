@@ -1,5 +1,5 @@
 import { desc, eq, and } from "drizzle-orm";
-import { issueSignedToken, presignUrl, put } from "@vercel/blob";
+import { BlobConfigError, DOWNLOAD_TTL_MS, PPTX_MIME, putPrivate, signDownloadUrl, assertBlobConfigured } from "../blob";
 import { buildDeck, DeckError, type DeckPayload } from "../render";
 import { DEFAULT_WORKSPACE_ID, getDb, schema } from "../db";
 import { getWeekSummary, type WeekSummary } from "./summary";
@@ -7,8 +7,7 @@ import { isActive } from "./updates";
 
 const { exportRun, file } = schema;
 
-export const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-export const DOWNLOAD_TTL_MS = 10 * 60 * 1000;
+export { DOWNLOAD_TTL_MS, PPTX_MIME, signDownloadUrl };
 
 /** A problem the user can fix (missing data etc.); message is safe to show. */
 export class ExportError extends Error {
@@ -90,15 +89,9 @@ export type ExportResult = {
   fileId?: string;
   downloadUrl?: string;
   expiresAt?: string;
+  /** Portal route (password login required) that always works while the file exists. */
+  downloadPath?: string;
 };
-
-/** Presigned GET URL for a private blob, valid for 10 minutes. */
-export async function signDownloadUrl(pathname: string, now = Date.now()): Promise<{ url: string; expiresAt: number }> {
-  const validUntil = now + DOWNLOAD_TTL_MS;
-  const token = await issueSignedToken({ pathname, operations: ["get"], validUntil });
-  const { presignedUrl } = await presignUrl(token, { operation: "get", pathname, access: "private", validUntil });
-  return { url: presignedUrl, expiresAt: validUntil };
-}
 
 export async function exportWeeklyDeck(
   weekStart?: string,
@@ -116,8 +109,10 @@ export async function exportWeeklyDeck(
   const base = { weekStart: summary.weekStart, slideText: built.text, slides: built.slides.length, warnings };
   if (opts.dryRun) return { dryRun: true, ...base };
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN && !process.env.VERCEL_OIDC_TOKEN) {
-    throw new ExportError("Vercel Blob is not configured (BLOB_READ_WRITE_TOKEN is missing).");
+  try {
+    assertBlobConfigured();
+  } catch (e) {
+    throw new ExportError((e as Error).message);
   }
   const db = getDb();
   const [run] = await db
@@ -126,11 +121,7 @@ export async function exportWeeklyDeck(
     .returning();
   try {
     const stamp = (opts.now ?? new Date()).toISOString().replace(/[:.]/g, "-");
-    const blob = await put(`exports/weekly-update-${summary.weekStart}-${stamp}.pptx`, built.buffer!, {
-      access: "private",
-      contentType: PPTX_MIME,
-      addRandomSuffix: true,
-    });
+    const blob = await putPrivate(`exports/weekly-update-${summary.weekStart}-${stamp}.pptx`, built.buffer!);
     const [f] = await db
       .insert(file)
       .values({
@@ -143,19 +134,22 @@ export async function exportWeeklyDeck(
       })
       .returning();
     await db.update(exportRun).set({ status: "done", fileId: f.id }).where(eq(exportRun.id, run.id));
-    const { url, expiresAt } = await signDownloadUrl(blob.pathname);
-    return {
-      dryRun: false,
-      ...base,
-      runId: run.id,
-      fileId: f.id,
-      downloadUrl: url,
-      expiresAt: new Date(expiresAt).toISOString(),
-    };
+    const common = { dryRun: false as const, ...base, runId: run.id, fileId: f.id, downloadPath: `/api/export/download?run=${run.id}` };
+    try {
+      const { url, expiresAt } = await signDownloadUrl(blob.pathname);
+      return { ...common, downloadUrl: url, expiresAt: new Date(expiresAt).toISOString() };
+    } catch (e) {
+      // Upload succeeded; only the signed link failed. Keep the deck reachable through the authenticated route.
+      const why = e instanceof Error ? e.message.split("\n")[0].slice(0, 200) : "unknown error";
+      return {
+        ...common,
+        warnings: [...warnings, `Could not create a signed download link (${why}). Open the portal (login required) at ${common.downloadPath} to download.`],
+      };
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await db.update(exportRun).set({ status: "failed", error: msg.slice(0, 1000) }).where(eq(exportRun.id, run.id));
-    throw new ExportError(`Export failed: ${msg}`);
+    throw new ExportError(e instanceof BlobConfigError ? msg : `Export failed: ${msg}`);
   }
 }
 
@@ -188,14 +182,24 @@ export async function listExportRuns(limit = 10): Promise<ExportRunRow[]> {
     .limit(limit);
 }
 
-/** Fresh 10-minute URL for a past export run (so stale links never need to be stored). */
-export async function getRunDownloadUrl(runId: string): Promise<string> {
+/** Stored file of a finished export run. */
+export async function getRunFile(runId: string): Promise<{ pathname: string; name: string }> {
   const db = getDb();
   const [row] = await db
-    .select({ pathname: file.blobPathname })
+    .select({ pathname: file.blobPathname, name: file.originalName })
     .from(exportRun)
     .innerJoin(file, eq(file.id, exportRun.fileId))
     .where(and(eq(exportRun.id, runId), eq(exportRun.workspaceId, DEFAULT_WORKSPACE_ID), eq(exportRun.status, "done")));
   if (!row) throw new ExportError("Export run not found or has no file.");
-  return (await signDownloadUrl(row.pathname)).url;
+  return { pathname: row.pathname, name: row.name ?? "weekly-update.pptx" };
+}
+
+/** Fresh 10-minute URL for a past export run (so stale links never need to be stored). */
+export async function getRunDownloadUrl(runId: string): Promise<string> {
+  const { pathname } = await getRunFile(runId);
+  try {
+    return (await signDownloadUrl(pathname)).url;
+  } catch (e) {
+    throw e instanceof BlobConfigError ? new ExportError(e.message) : e;
+  }
 }

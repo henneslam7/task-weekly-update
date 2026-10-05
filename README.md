@@ -20,7 +20,7 @@ projects / weekly updates / requests / achievements, then exports a weekly
 
 Week summary page: "Preview slide text" (dry run) and "Export deck" (renders a
 .pptx in memory, uploads to private Vercel Blob, shows a 10-minute download link;
-past exports are listed). Needs `BLOB_READ_WRITE_TOKEN` and a private Blob store.
+past exports are listed). Needs a private Blob store plus ONE auth method: `BLOB_READ_WRITE_TOKEN`, or `BLOB_STORE_ID` with Vercel OIDC (no token). Downloads: 10-minute presigned URL, or the password-protected `/api/export/download?run=<id>` route.
 CLI/dev check of the renderer: `npx vitest run src/lib/render`.
 
 ## Status

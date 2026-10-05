@@ -98,3 +98,8 @@ Timezone `WEEK_TZ` env, default `Asia/Hong_Kong` (ASSUMPTION: user works at Plaz
 - Line count is estimated (greedy word wrap, 0.48 em avg glyph width, 5% slack) in `src/lib/render/plan.ts`; verified visually in LibreOffice only, not PowerPoint.
 - Status table: 6 rows per slide. Per-item text caps raised (bullet 300, next steps 150, blocker 120 chars) - still ellipsised beyond that.
 - dry_run prints `Total slides: N`, the full slide list, then every slide's content.
+
+## Blob auth (private store)
+- `src/lib/blob.ts` no longer hard-requires `BLOB_READ_WRITE_TOKEN`. `@vercel/blob` 2.8.0 resolves credentials itself: explicit token > `BLOB_READ_WRITE_TOKEN` > Vercel OIDC token (request header on Vercel, or `VERCEL_OIDC_TOKEN`) + `BLOB_STORE_ID`. Our pre-check accepts token, or `BLOB_STORE_ID` on Vercel/with `VERCEL_OIDC_TOKEN`; otherwise a clear error names both options and what was found (never values). SDK credential rejections are mapped to the same message.
+- Uploads use `access: "private"`. Downloads: 10-minute presigned URL (`issueSignedToken` + `presignUrl`). `/api/export/download?run=<id>` (behind the password gate) redirects to a fresh presigned URL, or streams through the server if signing fails. If only signing fails after a successful upload, the export still succeeds with `downloadPath` and a warning.
+- Verified from the SDK typings/source only; not exercised against a real store (needs OIDC enabled on the Vercel project).
