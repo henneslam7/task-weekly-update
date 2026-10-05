@@ -77,3 +77,11 @@ Timezone `WEEK_TZ` env, default `Asia/Hong_Kong` (ASSUMPTION: user works at Plaz
 - task and blocker merged into `weekly_update` (`kind`/`status`); Supabase RLS dropped; `workspace_id` kept everywhere (except Better Auth's own tables).
 - Added `template_map` and `export_run` tables; added Better Auth tables.
 - Generated deck delivered via presigned Blob URL, not streamed through a function (4.5 MB cap).
+
+## Owner decisions (2026-10-05, supersede the above where they conflict)
+- Product is a **web app** (UI to record/review/export) first. Claude connection is secondary.
+- **No OAuth / no Better Auth.** Web app: single shared password (env `APP_PASSWORD`, signed cookie session). Unlisted URL.
+- Claude connector (later): authless MCP at a secret path `/api/mcp/<MCP_SECRET>`; no OAuth. Accepted because content is job tasks only, nothing confidential.
+- Data model: keep separate `request_log` and `achievement`; merge task+blocker into `weekly_update`.
+- Timezone `Asia/Hong_Kong`. Deck language English. Cadence: Monday noon recap of previous week.
+- Template `PPG_PPT_Templates_2026.pptx` (17 MB, 12 slides, brand-guide style, no native tables) is NOT committed to git (`*.pptx` ignored). Dev copy in `templates/`; production copy uploaded to private Vercel Blob (client upload, >4.5 MB).
