@@ -1,0 +1,1 @@
+{"name":"pptx-spike","private":true,"type":"module","version":"0.0.0","scripts":{"build":"node src/build.mjs"},"engines":{"node":">=20"},"dependencies":{"jszip":"3.10.2","pptx-automizer":"0.9.4"}}

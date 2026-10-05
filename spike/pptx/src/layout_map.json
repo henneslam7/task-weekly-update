@@ -1,0 +1,14 @@
+{
+  "_doc": "Shape-name map for templates/PPG_PPT_Templates_2026.pptx. Selection Pane names are looked up on the template slide; ideally the owner renames them (e.g. 'wk_title') and updates this file. Dimensions in inches (slide 13.333 x 7.5).",
+  "template_slide": 11,
+  "template_slide_layout": "Section Header",
+  "shapes": {
+    "title":   { "name": "TextBox 2",   "role": "headline (Times New Roman 20pt, 4.4in wide, autofit): slide title" },
+    "subtitle":{ "name": "Rectangle 3", "role": "body text top-right (Arial 10.5pt): 'Week of ...' + focus line" },
+    "content": { "name": "Rectangle 1", "role": "grey image placeholder: REMOVED; its area is used for generated cards / native table" }
+  },
+  "contentArea": { "x": 0.55, "y": 1.85, "w": 12.2, "h": 4.95 },
+  "brand": { "yellow": "FCDC00", "stone": "CEC5B7", "paper": "F0F1ED", "ink": "262626", "headFont": "Times New Roman", "bodyFont": "Arial" },
+  "rag": { "red": "D64545", "amber": "F2A900", "green": "3E9B5F" },
+  "limits": { "maxProjectRowsPerSlide": 7, "maxBulletChars": 200, "nextStepsChars": 120, "blockerChars": 90, "focusLineChars": 220 }
+}
