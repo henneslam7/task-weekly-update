@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { isMonday } from "../week";
+import { exportWeeklyDeck } from "../services/export";
 import {
   addAchievement,
   exportMarkdown,
@@ -270,6 +271,22 @@ export function registerTools(server: McpServer): void {
       annotations: RO,
     },
     ({ week_start }) => safe(async () => text(await exportMarkdown({ weekStart: week_start }))),
+  );
+
+  server.registerTool(
+    "export_weekly_deck",
+    {
+      title: "Export weekly deck (.pptx)",
+      description:
+        "Render the weekly .pptx from the company template and return a 10-minute download link. Use dry_run first to show the planned slide text to the user before rendering.",
+      inputSchema: z.object({
+        week_start: weekStart,
+        dry_run: z.boolean().optional().describe("If true, only return the planned slide text; nothing is rendered."),
+      }),
+      annotations: WR,
+    },
+    ({ week_start, dry_run }) =>
+      safe(async () => json(await exportWeeklyDeck(week_start, { dryRun: dry_run }))),
   );
 
   server.registerTool(
