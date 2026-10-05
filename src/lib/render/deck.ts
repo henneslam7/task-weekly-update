@@ -87,10 +87,10 @@ export async function buildDeck(payload: unknown, opts: BuildOptions = {}): Prom
   const text = dryRunText(slides);
   if (opts.dryRun) return { slides, text };
   const templatePath = opts.templatePath ?? defaultTemplatePath();
-  if (!fs.existsSync(templatePath)) throw new DeckError(`Template not found: ${templatePath}`);
+  if (!fs.existsSync(/*turbopackIgnore: true*/ templatePath)) throw new DeckError(`Template not found: ${templatePath}`);
   const file = path.basename(templatePath);
   const auto = new Automizer({
-    templateDir: path.dirname(path.resolve(templatePath)),
+    templateDir: path.dirname(path.resolve(/*turbopackIgnore: true*/ templatePath)),
     removeExistingSlides: true,
     autoImportSlideMasters: true,
     cleanup: true,
