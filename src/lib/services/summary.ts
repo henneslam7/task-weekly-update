@@ -57,8 +57,10 @@ export function renderMarkdown(s: WeekSummary): string {
     out.push(
       `### ${r.project.name} (${r.project.priority}, ${rag(u?.rag ?? r.project.status)}, ${r.project.progressPct}%)`,
     );
+    if (r.project.statusLabel) out.push(`- Status: ${r.project.statusLabel}`);
     if (!u) out.push("- No update logged this week");
     else {
+      if (u.progressThisWeek) out.push(`- Progress this week: ${u.progressThisWeek}`);
       if (u.progress) out.push(`- Progress: ${u.progress}`);
       if (u.nextSteps) out.push(`- Next: ${u.nextSteps}`);
       if (u.blockers) out.push(`- Blockers: ${u.blockers}`);

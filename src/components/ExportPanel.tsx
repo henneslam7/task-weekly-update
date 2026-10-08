@@ -6,7 +6,9 @@ import { btnCls } from "./ui";
 
 type Result = {
   dryRun: boolean;
-  slideText: string;
+  slideText?: string;
+  /** Sheet exports return the rows as a text table. */
+  text?: string;
   warnings: string[];
   downloadUrl?: string;
   downloadPath?: string;
@@ -16,16 +18,16 @@ type Result = {
 
 export function ExportPanel({ weekStart }: { weekStart: string }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"dry" | "export" | null>(null);
+  const [busy, setBusy] = useState<"dry" | "export" | "sheetDry" | "sheet" | null>(null);
   const [res, setRes] = useState<Result | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  async function run(dryRun: boolean) {
-    setBusy(dryRun ? "dry" : "export");
+  async function run(dryRun: boolean, sheet = false) {
+    setBusy(sheet ? (dryRun ? "sheetDry" : "sheet") : dryRun ? "dry" : "export");
     setErr(null);
     setRes(null);
     try {
-      const r = await fetch("/api/export", {
+      const r = await fetch(sheet ? "/api/export/sheet" : "/api/export", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ weekStart, dryRun }),
@@ -50,6 +52,13 @@ export function ExportPanel({ weekStart }: { weekStart: string }) {
         <button type="button" className={btnCls} disabled={busy !== null} onClick={() => run(false)}>
           {busy === "export" ? "Exporting..." : "Export deck"}
         </button>
+        <span className="mx-1 text-slate-300">|</span>
+        <button type="button" className={btnCls} disabled={busy !== null} onClick={() => run(true, true)}>
+          {busy === "sheetDry" ? "Planning..." : "Preview Excel rows"}
+        </button>
+        <button type="button" className={btnCls} disabled={busy !== null} onClick={() => run(false, true)}>
+          {busy === "sheet" ? "Exporting..." : "Export Excel (.xlsx)"}
+        </button>
       </div>
       {err && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{err}</p>}
       {res?.warnings?.length ? (
@@ -57,11 +66,11 @@ export function ExportPanel({ weekStart }: { weekStart: string }) {
       ) : null}
       {(res?.downloadUrl || res?.downloadPath) && (
         <p className="text-sm">
-          <a className="font-medium underline" href={res.downloadUrl ?? res.downloadPath}>Download deck (.pptx)</a>
+          <a className="font-medium underline" href={res.downloadUrl ?? res.downloadPath}>Download file</a>
           <span className="text-slate-500"> link valid for 10 minutes</span>
         </p>
       )}
-      {res?.dryRun && <pre className="overflow-x-auto whitespace-pre-wrap rounded border bg-slate-50 p-3 text-xs">{res.slideText}</pre>}
+      {res?.dryRun && <pre className="overflow-x-auto whitespace-pre-wrap rounded border bg-slate-50 p-3 text-xs">{res.slideText ?? res.text}</pre>}
     </div>
   );
 }

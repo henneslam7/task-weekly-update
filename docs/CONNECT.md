@@ -30,7 +30,7 @@ Add `--scope user` to make it available in every project.
 
 ## Tools
 
-`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`, `export_weekly_deck`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the previous week when called on a Monday). Project names are matched loosely.
+`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`, `export_weekly_deck`, `export_weekly_sheet`, `update_workspace_settings`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the previous week when called on a Monday). Project names are matched loosely.
 
 ## Weekly routine (paste into a Claude Project's instructions)
 
@@ -46,3 +46,14 @@ Every Monday:
 4. Call export_weekly_deck and give me the download link.
 For email/Slack use export_markdown instead. Never invent data; if a field is unknown, leave it out.
 ```
+
+## Weekly Excel block (team sheet)
+
+```text
+Every Friday (or when I ask): call list_missing_updates, log what I tell you with log_weekly_update
+(use progress_this_week for the "Progress this week" column), then call export_weekly_sheet with dry_run=true,
+show me the rows and every warning, wait for my OK, then export_weekly_sheet again without dry_run and give me the link.
+Never fill a blank with "-", "N/A" or "None".
+```
+
+One-time setup: `update_workspace_settings` with `owner_full_name` = "Hennes Lam" (the group row); on each project set `owner_short_name` ("Hennes"), `status_label` (To Start / On track / At risk / Blocked / Done), `release_date` + `release_date_type` (`target` or `actual`) or `release_date_note` ("TBA"), and `queue_order`.

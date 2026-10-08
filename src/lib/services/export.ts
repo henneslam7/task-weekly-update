@@ -4,6 +4,8 @@ import { buildDeck, DeckError, type DeckPayload } from "../render";
 import { DEFAULT_WORKSPACE_ID, getDb, schema } from "../db";
 import { getWeekSummary, type WeekSummary } from "./summary";
 import { isActive } from "./updates";
+import { getWorkspaceSettings } from "./workspace";
+import { DEFAULT_SHEET_CONFIG, formatIso, type SheetConfig } from "../sheet/config";
 
 const { exportRun, file } = schema;
 
@@ -17,11 +19,17 @@ export class ExportError extends Error {
   }
 }
 
+/** Release date as shown in the team sheet: "(Target Date: M/D/YYYY)" for planned, dd/MM/yyyy for delivered, else the free-text note. */
+function releaseText(p: { releaseDate: string | null; releaseDateType: "target" | "actual" | null; releaseDateNote: string | null }, cfg: SheetConfig): string | undefined {
+  if (p.releaseDate) return formatIso(p.releaseDate, p.releaseDateType === "actual" ? cfg.actualDateFormat : cfg.targetDateFormat);
+  return p.releaseDateNote?.trim() || undefined;
+}
+
 const clean = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 const dedupe = (xs: string[]) => [...new Set(xs.filter(Boolean))];
 
 /** Map the week data to the deck payload. Throws ExportError when there is nothing to export. */
-export function summaryToPayload(s: WeekSummary): { payload: DeckPayload; warnings: string[] } {
+export function summaryToPayload(s: WeekSummary, cfg: SheetConfig = DEFAULT_SHEET_CONFIG): { payload: DeckPayload; warnings: string[] } {
   const withUpdate = s.projects.filter((r) => r.update);
   if (!s.projects.length) {
     throw new ExportError("No projects exist yet. Add projects and log weekly updates before exporting.");
@@ -39,7 +47,8 @@ export function summaryToPayload(s: WeekSummary): { payload: DeckPayload; warnin
     const n = r.project.name;
     const u = r.update;
     if (u?.wins) wins.push(`${n}: ${clean(u.wins)}`);
-    if (u?.progress) progress.push(`${n}: ${clean(u.progress)}`);
+    const prog = u?.progress || u?.progressThisWeek;
+    if (prog) progress.push(`${n}: ${clean(prog)}`);
     if (u?.blockers) blockers.push(`${n}: ${clean(u.blockers)}`);
     for (const b of r.blockers) if (b.status !== "done") blockers.push(`${n}: ${clean(b.title)}`);
     if (u?.supportNeeded) support.push(`${n}: ${clean(u.supportNeeded)}`);
@@ -71,6 +80,8 @@ export function summaryToPayload(s: WeekSummary): { payload: DeckPayload; warnin
         rag: status === "done" ? "green" : status,
         progress_pct: r.project.progressPct,
         next_steps: clean(u?.nextSteps) || undefined,
+        status_label: r.project.statusLabel ?? undefined,
+        release: releaseText(r.project, cfg),
         blocker: clean(u?.blockers) || r.blockers.find((b) => b.status !== "done")?.title || undefined,
       };
     }),
@@ -97,8 +108,8 @@ export async function exportWeeklyDeck(
   weekStart?: string,
   opts: { dryRun?: boolean; now?: Date } = {},
 ): Promise<ExportResult> {
-  const summary = await getWeekSummary({ weekStart, now: opts.now });
-  const { payload, warnings } = summaryToPayload(summary);
+  const [summary, settings] = await Promise.all([getWeekSummary({ weekStart, now: opts.now }), getWorkspaceSettings()]);
+  const { payload, warnings } = summaryToPayload(summary, settings.sheet);
   let built;
   try {
     built = await buildDeck(payload, { dryRun: opts.dryRun });
@@ -106,44 +117,82 @@ export async function exportWeeklyDeck(
     if (e instanceof DeckError) throw new ExportError(e.message);
     throw e;
   }
-  const base = { weekStart: summary.weekStart, slideText: built.text, slides: built.slides.length, warnings };
-  if (opts.dryRun) return { dryRun: true, ...base };
+  if (opts.dryRun) {
+    return { dryRun: true, weekStart: summary.weekStart, slideText: built.text, slides: built.slides.length, warnings };
+  }
 
+  const stored = await storeExport({
+    format: "pptx",
+    weekStart: summary.weekStart,
+    ext: "pptx",
+    buffer: built.buffer!,
+    mime: PPTX_MIME,
+    now: opts.now,
+    warnings,
+  });
+  return { dryRun: false, weekStart: summary.weekStart, slideText: built.text, slides: built.slides.length, ...stored };
+}
+
+export type StoredExport = {
+  warnings: string[];
+  runId: string;
+  fileId: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+  downloadPath: string;
+};
+
+/**
+ * Upload a generated file to the PRIVATE Blob store, record file + export_run rows and return a 10-minute signed
+ * link. Shared by the deck (.pptx) and sheet (.xlsx) exports. If only the signed link fails, the export still
+ * succeeds and the authenticated `downloadPath` is returned with a warning.
+ */
+export async function storeExport(args: {
+  format: "pptx" | "xlsx";
+  weekStart: string;
+  ext: string;
+  buffer: Buffer;
+  mime: string;
+  now?: Date;
+  warnings: string[];
+  /** File name stem, e.g. "weekly-update" or "weekly-sheet". */
+  stem?: string;
+}): Promise<StoredExport> {
   try {
     assertBlobConfigured();
   } catch (e) {
     throw new ExportError((e as Error).message);
   }
+  const stem = args.stem ?? (args.format === "xlsx" ? "weekly-sheet" : "weekly-update");
   const db = getDb();
   const [run] = await db
     .insert(exportRun)
-    .values({ workspaceId: DEFAULT_WORKSPACE_ID, weekStart: summary.weekStart, status: "pending" })
+    .values({ workspaceId: DEFAULT_WORKSPACE_ID, weekStart: args.weekStart, format: args.format, status: "pending" })
     .returning();
   try {
-    const stamp = (opts.now ?? new Date()).toISOString().replace(/[:.]/g, "-");
-    const blob = await putPrivate(`exports/weekly-update-${summary.weekStart}-${stamp}.pptx`, built.buffer!);
+    const stamp = (args.now ?? new Date()).toISOString().replace(/[:.]/g, "-");
+    const blob = await putPrivate(`exports/${stem}-${args.weekStart}-${stamp}.${args.ext}`, args.buffer, args.mime);
     const [f] = await db
       .insert(file)
       .values({
         workspaceId: DEFAULT_WORKSPACE_ID,
         blobPathname: blob.pathname,
         kind: "export",
-        originalName: `weekly-update-${summary.weekStart}.pptx`,
-        bytes: built.buffer!.length,
-        weekStart: summary.weekStart,
+        originalName: `${stem}-${args.weekStart}.${args.ext}`,
+        bytes: args.buffer.length,
+        weekStart: args.weekStart,
       })
       .returning();
     await db.update(exportRun).set({ status: "done", fileId: f.id }).where(eq(exportRun.id, run.id));
-    const common = { dryRun: false as const, ...base, runId: run.id, fileId: f.id, downloadPath: `/api/export/download?run=${run.id}` };
+    const common = { runId: run.id, fileId: f.id, downloadPath: `/api/export/download?run=${run.id}` };
     try {
       const { url, expiresAt } = await signDownloadUrl(blob.pathname);
-      return { ...common, downloadUrl: url, expiresAt: new Date(expiresAt).toISOString() };
+      return { ...common, warnings: args.warnings, downloadUrl: url, expiresAt: new Date(expiresAt).toISOString() };
     } catch (e) {
-      // Upload succeeded; only the signed link failed. Keep the deck reachable through the authenticated route.
       const why = e instanceof Error ? e.message.split("\n")[0].slice(0, 200) : "unknown error";
       return {
         ...common,
-        warnings: [...warnings, `Could not create a signed download link (${why}). Open the portal (login required) at ${common.downloadPath} to download.`],
+        warnings: [...args.warnings, `Could not create a signed download link (${why}). Open the portal (login required) at ${common.downloadPath} to download.`],
       };
     }
   } catch (e) {
@@ -161,6 +210,7 @@ export type ExportRunRow = {
   createdAt: Date;
   fileId: string | null;
   bytes: number | null;
+  format: "pptx" | "xlsx";
 };
 
 export async function listExportRuns(limit = 10): Promise<ExportRunRow[]> {
@@ -174,6 +224,7 @@ export async function listExportRuns(limit = 10): Promise<ExportRunRow[]> {
       createdAt: exportRun.createdAt,
       fileId: exportRun.fileId,
       bytes: file.bytes,
+      format: exportRun.format,
     })
     .from(exportRun)
     .leftJoin(file, eq(file.id, exportRun.fileId))

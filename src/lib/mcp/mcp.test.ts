@@ -98,6 +98,7 @@ describe("tools via the route", () => {
       expect.arrayContaining([
         "list_projects", "upsert_project", "log_weekly_update", "get_week_summary",
         "list_missing_updates", "log_request", "add_achievement", "export_markdown", "export_cv_bullets",
+        "export_weekly_deck", "export_weekly_sheet", "update_workspace_settings",
       ]),
     );
   });
@@ -151,5 +152,49 @@ describe("readable errors", () => {
     const r = await call("log_request", { from_person: "A", summary: "B", outcome: "redirected" });
     expect(r.isError).toBe(true);
     expect(r.text).toMatch(/redirectedTo/);
+  });
+});
+
+describe("team Excel sheet tools", () => {
+  it("sets fields, shows rows in a dry run with warnings, and returns the new fields in the week summary", async () => {
+    expect(JSON.parse((await call("update_workspace_settings", { owner_full_name: "Hennes Lam" })).text!)).toMatchObject({ ownerFullName: "Hennes Lam", sheet: { sheetName: "Current" } });
+    await call("upsert_project", { name: "PPL Pass", priority: "P1", requester: "Sajin / Esther / Nicholas", progress_pct: 10, owner_short_name: "Hennes", status_label: "Blocked", release_date: "2026-10-30", release_date_type: "target", queue_order: 2 });
+    await call("upsert_project", { name: "ST sub-domain", priority: "P1", owner_short_name: "Hennes", status_label: "On track", release_date: "2026-10-06", release_date_type: "actual", queue_order: 3, progress_pct: 90 });
+    await call("upsert_project", { name: "WeChat", priority: "P2", owner_short_name: "Hennes", release_date_note: "TBA" });
+    const u = JSON.parse((await call("log_weekly_update", { project: "PPL Pass", week_start: "2026-10-05", progress_this_week: "10% complete. Started designing the Gifting page.", next_steps: "Finalise requirements", blockers: "Out of resources", support_needed: "Confirm requirements" })).text!);
+    expect(u.progressThisWeek).toBe("10% complete. Started designing the Gifting page.");
+    // old-style input still works
+    await call("log_weekly_update", { project: "ST sub", week_start: "2026-10-05", progress: "Ready for deployment", rag: "green" });
+
+    const dry = await call("export_weekly_sheet", { week_start: "2026-10-05", dry_run: true });
+    expect(dry.isError).toBe(false);
+    const r = JSON.parse(dry.text!);
+    expect(r).toMatchObject({ dryRun: true, rowCount: 3, weekStart: "2026-10-05" });
+    expect(r.text).toContain("| Hennes Lam |");
+    expect(r.text).toContain("| Hennes | Sajin / Esther / Nicholas | PPL Pass | P1 | Blocked | 10% complete. Started designing the Gifting page. | 10% | Finalise requirements | (Target Date: 10/30/2026) | Out of resources ⏎ Support: Confirm requirements |");
+    expect(r.text).toContain("06/10/2026");
+    expect(r.text).toContain("| TBA |");
+    expect(r.warnings.join("\n")).toMatch(/WeChat: no update logged for this week/);
+
+    const sum = JSON.parse((await call("get_week_summary", { week_start: "2026-10-05" })).text!);
+    const ppl = sum.projects.find((x: { project: { name: string } }) => x.project.name === "PPL Pass");
+    expect(ppl.project).toMatchObject({ statusLabel: "Blocked", releaseDate: "2026-10-30", releaseDateType: "target", ownerShortName: "Hennes", queueOrder: 2 });
+    expect(ppl.update.progressThisWeek).toContain("10% complete");
+  });
+
+  it("rejects bad enum values and non-Monday weeks readably", async () => {
+    const bad = await call("upsert_project", { name: "X", status_label: "Green" });
+    expect((bad.rpcError?.message ?? bad.text ?? "")).toMatch(/status_label|Invalid/i);
+    const wk = await call("export_weekly_sheet", { week_start: "2026-10-07", dry_run: true });
+    expect((wk.rpcError?.message ?? wk.text ?? "")).toMatch(/Monday/);
+    const fmt = await call("update_workspace_settings", { target_date_format: "(Target {Z})" });
+    expect(fmt.isError).toBe(true);
+    expect(fmt.text).toMatch(/unknown placeholder/);
+  });
+
+  it("can rename a project via new_name", async () => {
+    await call("upsert_project", { name: "PPL Pass" });
+    const r = JSON.parse((await call("upsert_project", { name: "PPL Pass", new_name: "PPL Pass (Pass Gifting)" })).text!);
+    expect(r.name).toBe("PPL Pass (Pass Gifting)");
   });
 });

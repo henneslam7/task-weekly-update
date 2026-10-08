@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { saveProjectAction, saveUpdateAction } from "../../actions";
 import { Card, Field, Rag, btnCls, inputCls } from "@/components/ui";
-import { findProject, getWeekSummary, PRIORITIES, PROJECT_STATUSES, RAGS } from "@/lib/services";
+import { findProject, getWeekSummary, PRIORITIES, PROJECT_STATUSES, RAGS, RELEASE_DATE_TYPES, STATUS_LABELS } from "@/lib/services";
 import { resolveWeekStart } from "@/lib/week";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +42,8 @@ export default async function ProjectPage({
           <input type="hidden" name="projectId" value={project.id} />
           <input type="hidden" name="weekStart" value={weekStart} />
           <Field label="Wins"><textarea name="wins" rows={2} defaultValue={u?.wins ?? ""} className={inputCls} /></Field>
-          <Field label="Progress"><textarea name="progress" rows={2} defaultValue={u?.progress ?? ""} className={inputCls} /></Field>
+          <Field label="Progress this week (Excel column)"><textarea name="progressThisWeek" rows={2} defaultValue={u?.progressThisWeek ?? ""} className={inputCls} /></Field>
+          <Field label="Progress (older field)"><textarea name="progress" rows={2} defaultValue={u?.progress ?? ""} className={inputCls} /></Field>
           <Field label="Next steps"><textarea name="nextSteps" rows={2} defaultValue={u?.nextSteps ?? ""} className={inputCls} /></Field>
           <Field label="Blockers"><textarea name="blockers" rows={2} defaultValue={u?.blockers ?? ""} className={inputCls} /></Field>
           <Field label="Support needed"><textarea name="supportNeeded" rows={2} defaultValue={u?.supportNeeded ?? ""} className={inputCls} /></Field>
@@ -78,6 +79,30 @@ export default async function ProjectPage({
           </Field>
           <Field label="Requester">
             <input name="requester" defaultValue={project.requester ?? ""} className={inputCls} />
+          </Field>
+          <Field label="Status (team sheet)">
+            <select name="statusLabel" defaultValue={project.statusLabel ?? ""} className={inputCls}>
+              <option value="">(not set)</option>
+              {STATUS_LABELS.map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </Field>
+          <Field label="Owner short name">
+            <input name="ownerShortName" defaultValue={project.ownerShortName ?? ""} className={inputCls} />
+          </Field>
+          <Field label="Release date">
+            <input name="releaseDate" type="date" defaultValue={project.releaseDate ?? ""} className={inputCls} />
+          </Field>
+          <Field label="Release date type">
+            <select name="releaseDateType" defaultValue={project.releaseDateType ?? ""} className={inputCls}>
+              <option value="">(not set)</option>
+              {RELEASE_DATE_TYPES.map((p) => <option key={p}>{p}</option>)}
+            </select>
+          </Field>
+          <Field label="Release date note (TBA, TBC ...)">
+            <input name="releaseDateNote" defaultValue={project.releaseDateNote ?? ""} className={inputCls} />
+          </Field>
+          <Field label="Queue order">
+            <input name="queueOrder" type="number" defaultValue={project.queueOrder ?? ""} className={inputCls} />
           </Field>
           <Field label="Description">
             <input name="description" defaultValue={project.description ?? ""} className={inputCls} />

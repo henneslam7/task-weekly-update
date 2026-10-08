@@ -1,5 +1,6 @@
 import {
   boolean,
+  jsonb,
   date,
   index,
   integer,
@@ -19,6 +20,9 @@ export const updateKindEnum = pgEnum("update_kind", ["progress", "task", "blocke
 export const updateStatusEnum = pgEnum("update_status", ["open", "done", "blocked"]);
 export const outcomeEnum = pgEnum("request_outcome", ["accepted", "redirected", "declined"]);
 export const fileKindEnum = pgEnum("file_kind", ["template", "export"]);
+export const statusLabelEnum = pgEnum("status_label", ["To Start", "On track", "At risk", "Blocked", "Done"]);
+export const releaseDateTypeEnum = pgEnum("release_date_type", ["target", "actual"]);
+export const exportFormatEnum = pgEnum("export_format", ["pptx", "xlsx"]);
 export const exportStatusEnum = pgEnum("export_status", ["pending", "done", "failed"]);
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -28,6 +32,10 @@ const workspaceId = () => uuid("workspace_id").notNull().references(() => worksp
 export const workspace = pgTable("workspace", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  /** Full name shown on the Excel group row, e.g. "Hennes Lam". */
+  ownerFullName: text("owner_full_name"),
+  /** Per-employer output settings (Excel date formats, sheet name ...). See src/lib/sheet/config.ts. */
+  brandConfig: jsonb("brand_config").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: createdAt(),
 });
 
@@ -43,6 +51,16 @@ export const project = pgTable(
     progressPct: integer("progress_pct").notNull().default(0),
     dueDate: date("due_date"),
     requester: text("requester"),
+    /** Short owner name for the Excel Owner column, e.g. "Hennes". */
+    ownerShortName: text("owner_short_name"),
+    /** Team-sheet Status. Stored explicitly; NOT derived from RAG. */
+    statusLabel: statusLabelEnum("status_label"),
+    releaseDate: date("release_date"),
+    releaseDateType: releaseDateTypeEnum("release_date_type"),
+    /** Free text shown when there is no date, e.g. "TBA", "within Nov". */
+    releaseDateNote: text("release_date_note"),
+    /** Order within the same priority in the Excel block (lower first). */
+    queueOrder: integer("queue_order"),
     archived: boolean("archived").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -61,6 +79,8 @@ export const weeklyUpdate = pgTable(
     title: text("title"),
     wins: text("wins"),
     progress: text("progress"),
+    /** Excel "Progress this week" free text (e.g. "10% complete. Started designing ..."). */
+    progressThisWeek: text("progress_this_week"),
     nextSteps: text("next_steps"),
     blockers: text("blockers"),
     supportNeeded: text("support_needed"),
@@ -133,6 +153,7 @@ export const exportRun = pgTable("export_run", {
   id: uuid("id").primaryKey().defaultRandom(),
   workspaceId: workspaceId(),
   weekStart: date("week_start").notNull(),
+  format: exportFormatEnum("format").notNull().default("pptx"),
   fileId: uuid("file_id").references(() => file.id),
   status: exportStatusEnum("status").notNull().default("pending"),
   error: text("error"),

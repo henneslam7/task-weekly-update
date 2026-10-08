@@ -103,3 +103,19 @@ Timezone `WEEK_TZ` env, default `Asia/Hong_Kong` (ASSUMPTION: user works at Plaz
 - `src/lib/blob.ts` no longer hard-requires `BLOB_READ_WRITE_TOKEN`. `@vercel/blob` 2.8.0 resolves credentials itself: explicit token > `BLOB_READ_WRITE_TOKEN` > Vercel OIDC token (request header on Vercel, or `VERCEL_OIDC_TOKEN`) + `BLOB_STORE_ID`. Our pre-check accepts token, or `BLOB_STORE_ID` on Vercel/with `VERCEL_OIDC_TOKEN`; otherwise a clear error names both options and what was found (never values). SDK credential rejections are mapped to the same message.
 - Uploads use `access: "private"`. Downloads: 10-minute presigned URL (`issueSignedToken` + `presignUrl`). `/api/export/download?run=<id>` (behind the password gate) redirects to a fresh presigned URL, or streams through the server if signing fails. If only signing fails after a successful upload, the export still succeeds with `downloadPath` and a warning.
 - Verified from the SDK typings/source only; not exercised against a real store (needs OIDC enabled on the Vercel project).
+
+## Team Excel sheet export (change request WEEKLY_UPDATE_EXCEL_SPEC.md)
+Built against the team's real tracker (`Ecommerce_Weekly_Updates_Tracker.xlsx`, tab "Current "): header row 4 `Owner ... Last updated`, one merged group row per team lead (fill EAD9E0), header fill 6B1D3E, Arial 10, wrapped top-aligned cells, Status colours by conditional formatting (On track C6EFCE, At risk FFEB9C, Blocked FFC7CE, Done D9D9D9, To Start none). The workbook itself is NOT committed (`*.xlsx` is git-ignored).
+Departures from the change request, all because the real sheet differs from the markdown:
+- **`project.release_date_note`** added. The real sheet also holds free text ("TBA", "TBC", "within Nov", "the week of 6 Oct"), which a date-only field cannot express. Rule: date -> real date (actual) or "(Target Date: M/D/YYYY)" text (target); no date -> note text; else blank + warning.
+- **Total Progress** is written as a number (0.1) with format `0%`, exactly like the sheet, so it displays "10%" and the sheet's Summary formulas keep working. (Not the text "10%".)
+- **Delivered release date** is a real Excel date with `dd/mm/yyyy` (the ST sub-domain cell is a date in the real sheet); planned dates are text, as in the sheet.
+- Date formats live in `workspace.brand_config.sheet` as `{YYYY} {MM} {M} {DD} {D}` placeholders (not letter tokens, because "Target Date" contains D/a/t/e). `workspace.owner_full_name` holds the group-row name. Both editable via the `update_workspace_settings` MCP tool.
+- **`project.queue_order`** (order within a priority) and `project.owner_short_name` added; the owner filter matches the short name only.
+- Status is stored (`project.status_label`) and never derived from RAG; blank Status -> blank cell + warning.
+- Last updated = latest `updated_at` among the week's progress/task/blocker rows, as a calendar date in `WEEK_TZ`.
+- Open blocker items (kind=blocker) are appended to the blocker text with "; " before the "Support: ..." line.
+- Legacy `progress` text is used for "Progress this week" when the new field is empty, with a warning (backward compatible).
+- Worksheet is named "Current" (the team's tab is "Current " with a trailing space); page setup is landscape fit-to-width. Not done (optional in the spec): `import_weekly_sheet`, the "Wins of the week" block.
+- Deck: status table adds Status and Release date, 6 rows per slide (was 7); summary cards still 14pt with pagination.
+- Migration `0001_excel_sheet_fields` is additive (nullable columns); `drizzle/rollback/0001_excel_sheet_fields.down.sql` reverses it by hand and a test proves existing weekly updates survive. `upsert_project` also gained `new_name` (rename) because the sheet renames "PPL Pass" to "PPL Pass (Pass Gifting)".

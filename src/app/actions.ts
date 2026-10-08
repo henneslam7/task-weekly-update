@@ -21,6 +21,8 @@ import {
   type Priority,
   type ProjectStatus,
   type Rag,
+  type ReleaseDateType,
+  type StatusLabel,
 } from "@/lib/services";
 
 /** Empty string -> null; missing field -> undefined (leave untouched). */
@@ -70,6 +72,12 @@ export async function saveProjectAction(fd: FormData) {
     progressPct: pct ? Number(pct) : undefined,
     dueDate: opt(fd, "dueDate"),
     requester: opt(fd, "requester"),
+    ownerShortName: opt(fd, "ownerShortName"),
+    statusLabel: opt(fd, "statusLabel") as StatusLabel | null | undefined,
+    releaseDate: opt(fd, "releaseDate"),
+    releaseDateType: opt(fd, "releaseDateType") as ReleaseDateType | null | undefined,
+    releaseDateNote: opt(fd, "releaseDateNote"),
+    queueOrder: opt(fd, "queueOrder") ? Number(opt(fd, "queueOrder")) : opt(fd, "queueOrder") === null ? null : undefined,
     archived: fd.has("archivedPresent") ? fd.get("archived") === "on" : undefined,
   });
   revalidatePath("/", "layout");
@@ -81,6 +89,7 @@ export async function saveUpdateAction(fd: FormData) {
     weekStart: opt(fd, "weekStart") ?? undefined,
     wins: opt(fd, "wins"),
     progress: opt(fd, "progress"),
+    progressThisWeek: opt(fd, "progressThisWeek"),
     nextSteps: opt(fd, "nextSteps"),
     blockers: opt(fd, "blockers"),
     supportNeeded: opt(fd, "supportNeeded"),

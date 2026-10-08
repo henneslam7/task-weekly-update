@@ -22,6 +22,8 @@ export type LogWeeklyUpdateInput = {
   title?: string;
   wins?: string | null;
   progress?: string | null;
+  /** Excel "Progress this week" free text. */
+  progressThisWeek?: string | null;
   nextSteps?: string | null;
   blockers?: string | null;
   supportNeeded?: string | null;
@@ -44,6 +46,7 @@ export async function logWeeklyUpdate(input: LogWeeklyUpdateInput): Promise<Week
   const values = {
     wins: input.wins,
     progress: input.progress,
+    progressThisWeek: input.progressThisWeek,
     nextSteps: input.nextSteps,
     blockers: input.blockers,
     supportNeeded: input.supportNeeded,

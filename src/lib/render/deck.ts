@@ -46,20 +46,22 @@ function drawSummary(s: SummarySlide, slide: any) {
 function drawStatus(s: StatusSlide, slide: any) {
   const hdr = (t: string, al = "left") => ({ text: t, options: { bold: true, color: B.ink, fill: { color: B.yellow }, align: al, fontFace: B.bodyFont, fontSize: 10 } });
   const cell = (t: string, o: Record<string, unknown> = {}) => ({ text: t, options: { fontFace: B.bodyFont, fontSize: 9, color: B.ink, valign: "middle", ...o } });
-  const rows: any[][] = [[hdr("Project"), hdr("Priority"), hdr("RAG", "center"), hdr("Progress", "center"), hdr("Next steps"), hdr("Blocker")]];
+  const rows: any[][] = [[hdr("Project"), hdr("Priority"), hdr("RAG", "center"), hdr("Status"), hdr("Progress", "center"), hdr("Next steps"), hdr("Release date"), hdr("Blocker")]];
   s.rows.forEach((r, i) => {
     const fill = { color: i % 2 ? "FFFFFF" : B.paper };
     rows.push([
       cell(r.name, { bold: true, fill }),
       cell(r.priority, { fill }),
       cell(titleCase(r.rag), { bold: true, align: "center", color: r.rag === "amber" ? B.ink : "FFFFFF", fill: { color: RAGC[r.rag] } }),
+      cell(r.status, { fill }),
       cell(r.pct + "%", { align: "center", fill }),
       cell(r.next, { fill }),
+      cell(r.release, { fill }),
       cell(r.blocker, { fill }),
     ]);
   });
   slide.addTable(rows, {
-    x: A.x, y: A.y, w: A.w, colW: [2.3, 0.9, 0.8, 1.0, 4.2, 3.0], rowH: [0.38, ...s.rows.map(() => 0.58)],
+    x: A.x, y: A.y, w: A.w, colW: [2.0, 0.75, 0.7, 1.0, 0.85, 3.1, 1.6, 2.2], rowH: [0.38, ...s.rows.map(() => 0.7)],
     border: { type: "solid", pt: 0.5, color: B.stone }, margin: [0.04, 0.08, 0.04, 0.08],
   });
 }

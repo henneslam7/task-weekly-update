@@ -2,6 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { isMonday } from "../week";
 import { exportWeeklyDeck } from "../services/export";
+import { exportWeeklySheet } from "../services/exportSheet";
+import { getWorkspaceSettings, updateWorkspaceSettings } from "../services/workspace";
 import {
   addAchievement,
   exportMarkdown,
@@ -16,6 +18,8 @@ import {
   PRIORITIES,
   PROJECT_STATUSES,
   RAGS,
+  RELEASE_DATE_TYPES,
+  STATUS_LABELS,
   type Project,
 } from "../services";
 
@@ -114,7 +118,24 @@ export function registerTools(server: McpServer): void {
         status: z.enum(PROJECT_STATUSES).optional(),
         progress_pct: z.number().int().min(0).max(100).optional().describe("Overall completion 0-100."),
         due_date: ymd("Due date YYYY-MM-DD.").optional(),
-        requester: z.string().optional().describe("Who asked for it."),
+        requester: z.string().optional().describe("Who asked for it. Free text, may contain '/' and brackets."),
+        owner_short_name: z.string().optional().describe("Short owner name for the team Excel sheet's Owner column, e.g. 'Hennes'."),
+        status_label: z
+          .enum(STATUS_LABELS)
+          .optional()
+          .describe("Team-sheet Status: To Start, On track, At risk, Blocked or Done. Set explicitly; it is NOT the same as RAG/status colour."),
+        release_date: ymd("Release date YYYY-MM-DD (planned or delivered, see release_date_type).").nullable().optional(),
+        release_date_type: z
+          .enum(RELEASE_DATE_TYPES)
+          .nullable()
+          .optional()
+          .describe("'target' = planned, shown as (Target Date: M/D/YYYY); 'actual' = delivered, shown as dd/MM/yyyy."),
+        release_date_note: z
+          .string()
+          .optional()
+          .describe("Free text used when there is no date, e.g. 'TBA', 'TBC', 'within Nov'."),
+        queue_order: z.number().int().optional().describe("Order within the same priority in the Excel block (1 = first)."),
+        new_name: z.string().min(1).optional().describe("Rename the project called `name` to this."),
         archived: z.boolean().optional(),
       }),
       annotations: WR,
@@ -127,6 +148,13 @@ export function registerTools(server: McpServer): void {
         return json(
           await upsertProject({
             name: existing?.name ?? a.name,
+            newName: a.new_name,
+            ownerShortName: a.owner_short_name,
+            statusLabel: a.status_label,
+            releaseDate: a.release_date,
+            releaseDateType: a.release_date_type,
+            releaseDateNote: a.release_date_note,
+            queueOrder: a.queue_order,
             description: a.description,
             priority: a.priority,
             status: a.status,
@@ -149,7 +177,11 @@ export function registerTools(server: McpServer): void {
         project: z.string().min(1).describe("Project name (fuzzy) or id."),
         week_start: weekStart,
         wins: z.string().optional().describe("What went well / was delivered."),
-        progress: z.string().optional().describe("What was done this week."),
+        progress: z.string().optional().describe("What was done this week (older free-text field; still supported)."),
+        progress_this_week: z
+          .string()
+          .optional()
+          .describe("Text for the team sheet's 'Progress this week' column, e.g. '10% complete. Started designing the Gifting page; first draft in progress.'"),
         next_steps: z.string().optional(),
         blockers: z.string().optional().describe("What is blocking progress."),
         support_needed: z.string().optional(),
@@ -166,6 +198,7 @@ export function registerTools(server: McpServer): void {
             weekStart: a.week_start,
             wins: a.wins,
             progress: a.progress,
+            progressThisWeek: a.progress_this_week,
             nextSteps: a.next_steps,
             blockers: a.blockers,
             supportNeeded: a.support_needed,
@@ -258,6 +291,66 @@ export function registerTools(server: McpServer): void {
             project: p?.id ?? null,
             achievedOn: a.achieved_on,
           }),
+        );
+      }),
+  );
+
+  server.registerTool(
+    "export_weekly_sheet",
+    {
+      title: "Export the team Excel sheet block (.xlsx)",
+      description:
+        "Build the owner's block for the team's weekly Excel sheet: columns Owner, Requester, Initiative, Priority, Status, Progress this week, Total Progress, Next steps, Release date, Support needed / blocker, Last updated; a group row with the owner's full name; rows ordered P1 first then queue order. Returns a 10-minute download link. ALWAYS call with dry_run=true first and show the owner the rows and warnings; export only after they confirm. Missing fields are reported as warnings and left blank, never filled with placeholders.",
+      inputSchema: z.object({
+        week_start: weekStart,
+        owner: z.string().optional().describe("Only projects whose owner short name matches, e.g. 'Hennes'. Default: all."),
+        include_header: z.boolean().optional().describe("Include the header row. Default true."),
+        include_group_row: z.boolean().optional().describe("Include the group row with the owner's full name. Default true."),
+        dry_run: z.boolean().optional().describe("If true, only return the rows as a text table plus warnings; nothing is rendered."),
+      }),
+      annotations: WR,
+    },
+    (a) =>
+      safe(async () =>
+        json(
+          await exportWeeklySheet(a.week_start, {
+            owner: a.owner,
+            includeHeader: a.include_header,
+            includeGroupRow: a.include_group_row,
+            dryRun: a.dry_run,
+          }),
+        ),
+      ),
+  );
+
+  server.registerTool(
+    "update_workspace_settings",
+    {
+      title: "Workspace settings (owner full name, Excel formats)",
+      description:
+        "Read or change workspace output settings. With no arguments it just returns the current settings. owner_full_name is the group-row text in the Excel export (e.g. 'Hennes Lam'). The date formats use {YYYY} {MM} {M} {DD} {D}, e.g. target '(Target Date: {M}/{D}/{YYYY})' and actual '{DD}/{MM}/{YYYY}'.",
+      inputSchema: z.object({
+        owner_full_name: z.string().optional(),
+        sheet_name: z.string().optional().describe("Worksheet name in the exported .xlsx. Default 'Current'."),
+        target_date_format: z.string().optional(),
+        actual_date_format: z.string().optional(),
+        last_updated_format: z.string().optional(),
+      }),
+      annotations: WR,
+    },
+    (a) =>
+      safe(async () => {
+        const sheet = {
+          ...(a.sheet_name !== undefined ? { sheetName: a.sheet_name } : {}),
+          ...(a.target_date_format !== undefined ? { targetDateFormat: a.target_date_format } : {}),
+          ...(a.actual_date_format !== undefined ? { actualDateFormat: a.actual_date_format } : {}),
+          ...(a.last_updated_format !== undefined ? { lastUpdatedFormat: a.last_updated_format } : {}),
+        };
+        const changing = a.owner_full_name !== undefined || Object.keys(sheet).length > 0;
+        return json(
+          changing
+            ? await updateWorkspaceSettings({ ownerFullName: a.owner_full_name, sheet: Object.keys(sheet).length ? sheet : undefined })
+            : await getWorkspaceSettings(),
         );
       }),
   );

@@ -44,6 +44,7 @@ export default async function SummaryPage({ searchParams }: { searchParams: Prom
             {runs.map((r) => (
               <li key={r.id} className="flex flex-wrap gap-x-3">
                 <span>{r.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC</span>
+                <span>{r.format}</span>
                 <span>week {r.weekStart}</span>
                 <span className={r.status === "failed" ? "text-red-700" : ""}>{r.status}</span>
                 {r.status === "done" && r.fileId && (

@@ -25,7 +25,9 @@ export async function GET(req: Request) {
     if (!f) return NextResponse.json({ error: "File not found in Blob storage" }, { status: 404 });
     return new Response(f.stream, {
       headers: {
-        "content-type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "content-type": name.toLowerCase().endsWith(".xlsx")
+          ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          : "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "content-disposition": `attachment; filename="${name.replace(/[^\w.-]/g, "_")}"`,
         "cache-control": "private, no-store",
         "content-length": String(f.size),

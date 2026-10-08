@@ -23,6 +23,10 @@ Week summary page: "Preview slide text" (dry run) and "Export deck" (renders a
 past exports are listed). Needs a private Blob store plus ONE auth method: `BLOB_READ_WRITE_TOKEN`, or `BLOB_STORE_ID` with Vercel OIDC (no token). Downloads: 10-minute presigned URL, or the password-protected `/api/export/download?run=<id>` route.
 CLI/dev check of the renderer: `npx vitest run src/lib/render`.
 
+## Export Excel block
+
+Week summary page: "Preview Excel rows" and "Export Excel (.xlsx)" (same private Blob + 10-minute link as the deck). The file holds the team sheet's columns, a group row with the owner's full name and one row per initiative, ready to paste into the shared sheet. See `DECISIONS.md` "Team Excel sheet export". Team workbooks (`*.xlsx`) are git-ignored.
+
 ## Status
 
 Design agreed. See `DECISIONS.md` for stack choices and `HANDOVER.md` plan.

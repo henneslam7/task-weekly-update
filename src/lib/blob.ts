@@ -64,9 +64,9 @@ async function guarded<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** Upload to the PRIVATE store (never public). Returns the stored pathname. */
-export function putPrivate(pathname: string, body: Buffer): Promise<{ pathname: string }> {
+export function putPrivate(pathname: string, body: Buffer, contentType: string = PPTX_MIME): Promise<{ pathname: string }> {
   return guarded(async () => {
-    const b = await put(pathname, body, { access: "private", contentType: PPTX_MIME, addRandomSuffix: true });
+    const b = await put(pathname, body, { access: "private", contentType, addRandomSuffix: true });
     return { pathname: b.pathname };
   });
 }

@@ -20,6 +20,10 @@ export type DeckProject = {
   progress_pct: number;
   next_steps?: string;
   blocker?: string;
+  /** Team-sheet Status (To Start / On track / At risk / Blocked / Done). */
+  status_label?: string;
+  /** Release date text as in the team sheet, e.g. "(Target Date: 11/1/2026)", "06/10/2026" or "TBA". */
+  release?: string;
 };
 export type DeckPayload = {
   week_start: string;
@@ -31,7 +35,7 @@ export type DeckPayload = {
   projects: DeckProject[];
 };
 
-export type StatusRow = { name: string; priority: string; rag: Rag; pct: number; next: string; blocker: string };
+export type StatusRow = { name: string; priority: string; rag: Rag; pct: number; status: string; release: string; next: string; blocker: string };
 export type Block = { kind: "heading" | "bullet" | "empty"; text: string };
 export type SummaryColumn = { head: string; accent: "yellow" | "red"; blocks: Block[] };
 export type SummarySlide = { type: "summary"; title: string; sub: string[]; columns: SummaryColumn[] };
@@ -166,6 +170,8 @@ export function plan(p: unknown): PlannedSlide[] {
       priority: truncate(r.priority || "-", 12),
       rag,
       pct: Math.round(Number(r.progress_pct)),
+      status: truncate(r.status_label || "", 12),
+      release: truncate(r.release || "", 40),
       next: truncate(r.next_steps || "-", L.nextStepsChars),
       blocker: truncate(r.blocker || "-", L.blockerChars),
     }));
@@ -234,7 +240,7 @@ export function dryRunText(slides: PlannedSlide[]): string {
       }
     else
       s.rows.forEach((r) =>
-        out.push(`  | ${r.name} | ${r.priority} | ${r.rag.toUpperCase()} | ${r.pct}% | ${r.next} | ${r.blocker}`),
+        out.push(`  | ${r.name} | ${r.priority} | ${r.rag.toUpperCase()} | ${r.status || "-"} | ${r.pct}% | ${r.release || "-"} | ${r.next} | ${r.blocker}`),
       );
   });
   return out.join("\n");
