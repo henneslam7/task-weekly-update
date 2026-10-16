@@ -1,5 +1,6 @@
 // Pure mapping: week summary -> the team Excel block (group row + rows). No I/O, so it is easy to test.
 import type { WeekSummary } from "../services/summary";
+import { weekEndingFriday } from "../week";
 import { DEFAULT_SHEET_CONFIG, formatIso, isoDateInTz, type SheetConfig } from "./config";
 
 export const SHEET_HEADERS = [
@@ -141,7 +142,9 @@ export function blockToText(
   const { includeHeader = true, includeGroupRow = true } = opts;
   const cell = (s: string) => s.replace(/\n/g, " ⏎ ");
   const line = (cells: string[]) => "| " + cells.map(cell).join(" | ") + " |";
-  const out: string[] = [`Week of ${b.weekStart}: ${b.rows.length} row(s)`];
+  const out: string[] = [
+    `Week of ${b.weekStart} (week ending Friday ${formatIso(weekEndingFriday(b.weekStart), DEFAULT_SHEET_CONFIG.lastUpdatedFormat)}): ${b.rows.length} row(s)`,
+  ];
   if (includeHeader) out.push(line([...SHEET_HEADERS]));
   if (includeGroupRow) out.push(line([b.groupName]));
   for (const r of b.rows) {

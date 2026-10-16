@@ -119,3 +119,6 @@ Departures from the change request, all because the real sheet differs from the 
 - Worksheet is named "Current" (the team's tab is "Current " with a trailing space); page setup is landscape fit-to-width. Not done (optional in the spec): `import_weekly_sheet`, the "Wins of the week" block.
 - Deck: status table adds Status and Release date, 6 rows per slide (was 7); summary cards still 14pt with pagination.
 - Migration `0001_excel_sheet_fields` is additive (nullable columns); `drizzle/rollback/0001_excel_sheet_fields.down.sql` reverses it by hand and a test proves existing weekly updates survive. `upsert_project` also gained `new_name` (rename) because the sheet renames "PPL Pass" to "PPL Pass (Pass Gifting)".
+
+## Reporting cadence: every Friday (owner decision 2026-10-16)
+Supersedes "Monday noon recap" and the old Monday rule: the team updates the sheet **every Friday by 12pm** ("Week ending (Friday)"). The default `week_start` is now always the Monday of the Mon-Sun week that contains "now" in `WEEK_TZ` (Sat/Sun still belong to the week just reported); nothing special happens on Monday. `weekEndingFriday(weekStart)` = Monday + 4; the sheet dry run prints it. Owner also confirmed: requester stays on one line ("Aerotel Commercial (Helen, Jessica) / Agnes"), "Juliana" is the right spelling, and the "Wins of the week" block is not needed.

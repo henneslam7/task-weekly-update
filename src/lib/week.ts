@@ -1,8 +1,7 @@
 /**
- * week_start rule (DECISIONS.md):
- * - Monday (any time of day) -> the week that just ended: monday(now) - 7 days.
- * - Any other day            -> monday(now).
- * Dates are plain "YYYY-MM-DD" strings (Postgres `date`), never timestamps.
+ * week_start rule (DECISIONS.md, updated 2026-10-16: the team reports every Friday by 12pm):
+ * the default week is always the Mon-Sun week that contains "now" (Mon-Fri while updating, Sat/Sun still the week
+ * just reported). Nothing special happens on Monday. Dates are plain "YYYY-MM-DD" strings (Postgres `date`).
  */
 export const DEFAULT_TZ = "Asia/Hong_Kong";
 
@@ -53,8 +52,12 @@ export function todayLocal(now: Date = new Date(), tz: string = weekTz()): strin
 
 export function currentWeekStart(now: Date = new Date(), tz: string = weekTz()): string {
   const { ymd, isoDow } = localDate(now, tz);
-  const monday = addDays(ymd, -(isoDow - 1));
-  return isoDow === 1 ? addDays(monday, -7) : monday;
+  return addDays(ymd, -(isoDow - 1));
+}
+
+/** The Friday of the week (the team sheet's "Week ending (Friday)"). */
+export function weekEndingFriday(weekStart: string): string {
+  return addDays(weekStart, 4);
 }
 
 /** Explicit week_start must be a Monday; otherwise fall back to the rule. */

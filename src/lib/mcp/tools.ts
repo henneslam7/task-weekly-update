@@ -57,7 +57,7 @@ const weekStart = z
   }, "week_start must be a Monday (YYYY-MM-DD)")
   .optional()
   .describe(
-    "Monday of the week, YYYY-MM-DD. Omit for the default: the current week, or the previous week when called on a Monday.",
+    "Monday of the week, YYYY-MM-DD. Omit for the default: the current Mon-Sun week (the team reports every Friday by 12pm).",
   );
 const ymd = (what: string) =>
   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").describe(what);

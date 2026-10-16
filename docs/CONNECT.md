@@ -30,7 +30,7 @@ Add `--scope user` to make it available in every project.
 
 ## Tools
 
-`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`, `export_weekly_deck`, `export_weekly_sheet`, `update_workspace_settings`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the previous week when called on a Monday). Project names are matched loosely.
+`list_projects`, `upsert_project`, `log_weekly_update`, `get_week_summary`, `list_missing_updates`, `log_request`, `add_achievement`, `export_markdown`, `export_cv_bullets`, `export_weekly_deck`, `export_weekly_sheet`, `update_workspace_settings`. Writes are idempotent and return the saved record. `week_start` must be a Monday; omit it for the default week (the current Mon-Sun week; the team reports every Friday by 12pm). Project names are matched loosely.
 
 ## Weekly routine (paste into a Claude Project's instructions)
 
@@ -38,7 +38,7 @@ Add `--scope user` to make it available in every project.
 You help me with my weekly update using the "portal" connector. Timezone Asia/Hong_Kong, English.
 When I give you updates, log them with log_weekly_update / log_request / add_achievement
 (match project names loosely, ask only if ambiguous).
-Every Monday:
+Every Friday by 12pm:
 1. Call list_missing_updates and ask me about each project listed.
 2. Log my answers, then call get_week_summary and show me a short draft
    (wins, status per project, requests, blockers).
